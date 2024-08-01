@@ -60,6 +60,7 @@ public class WorkerCommon
     private static Storage s3;
     protected static Storage minio;
     private static Storage redis;
+    private static Storage stream;
     public static final int rowBatchSize;
     protected static final int pixelStride;
     protected static final int rowGroupSize;
@@ -89,6 +90,10 @@ public class WorkerCommon
             {
                 ConfigRedis(storageInfo.getEndpoint(), storageInfo.getAccessKey(), storageInfo.getSecretKey());
                 WorkerCommon.redis = StorageFactory.Instance().getStorage(Storage.Scheme.redis);
+            }
+            else if (WorkerCommon.stream == null && storageInfo.getScheme() == Storage.Scheme.stream)
+            {
+                WorkerCommon.stream = StorageFactory.Instance().getStorage(Storage.Scheme.stream);
             }
         } catch (Throwable e)
         {

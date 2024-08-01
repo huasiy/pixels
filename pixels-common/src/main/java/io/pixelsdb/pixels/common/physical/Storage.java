@@ -46,8 +46,8 @@ public interface Storage
         minio, // Minio
         redis, // Redis
         gcs,   // google cloud storage
-        mock; // mock
-
+        mock,  // mock
+        stream, // http stream
         /**
          * Case-insensitive parsing from String name to enum value.
          * @param value the name of storage scheme.
