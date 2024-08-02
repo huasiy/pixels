@@ -20,23 +20,29 @@
 
 import io.pixelsdb.pixels.common.physical.Storage;
 import io.pixelsdb.pixels.common.physical.StorageFactory;
-import io.pixelsdb.pixels.core.PixelsFooterCache;
-import io.pixelsdb.pixels.core.PixelsReaderImpl;
-import io.pixelsdb.pixels.core.PixelsWriter;
+import io.pixelsdb.pixels.core.*;
 import io.pixelsdb.pixels.core.encoding.EncodingLevel;
 import io.pixelsdb.pixels.core.reader.PixelsReaderOption;
 import io.pixelsdb.pixels.core.reader.PixelsRecordReader;
 import io.pixelsdb.pixels.core.vector.VectorizedRowBatch;
-import io.pixelsdb.pixels.worker.common.WorkerException;
-import io.pixelsdb.pixels.core.PixelsReaderStreamImpl;
-import io.pixelsdb.pixels.core.PixelsWriterStreamImpl;
+import io.pixelsdb.pixels.executor.join.Partitioner;
+import io.pixelsdb.pixels.executor.predicate.ColumnFilter;
+import io.pixelsdb.pixels.executor.predicate.TableScanFilter;
+import io.pixelsdb.pixels.executor.scan.Scanner;
+import io.pixelsdb.pixels.planner.plan.physical.domain.InputInfo;
+import io.pixelsdb.pixels.planner.plan.physical.domain.InputSplit;
+import io.pixelsdb.pixels.planner.plan.physical.domain.StorageInfo;
+import io.pixelsdb.pixels.worker.common.*;
 import org.junit.Test;
 
 import java.io.IOException;
 import java.net.URI;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * @author jasha64
@@ -217,5 +223,162 @@ public class TestHttpServerClient
                 e.printStackTrace();
             }
         }, 3);
+    }
+
+    public void runServer()
+    {
+        PixelsReaderStreamImpl reader = new PixelsReaderStreamImpl("localhost:")
+    }
+
+    public void runLeftPartitioner()
+    {
+        int numPartition = 8;
+        long transId = 123456;
+        String filePath = "/Users/hsy/Documents/nation.pxl";
+        StorageInfo inputStorage = new StorageInfo(Storage.Scheme.file, "", "", "", "");
+        StorageInfo outputStorage = new StorageInfo(Storage.Scheme.stream, "", "", "", "");
+        WorkerCommon.initStorage(inputStorage);
+        WorkerCommon.initStorage(outputStorage);
+
+        InputInfo scanInput = new InputInfo(filePath, 0 ,4);
+        List<InputInfo> scanInputs = new ArrayList<>();
+        scanInputs.add(scanInput);
+        InputSplit inputSplit = new InputSplit();
+        inputSplit.setInputInfos(scanInputs);
+        List<InputSplit> inputSplits = new ArrayList<>();
+        inputSplits.add(inputSplit);
+
+        String[] colNames = new String[]{"n_nationkey", "n_name", "n_regionkey", "n_comment"};
+        SortedMap<Integer, ColumnFilter> columnFilters = new TreeMap<>();
+        TableScanFilter filter = new TableScanFilter("tpch", "lineitem", columnFilters);
+        ExecutorService threadPool = Executors.newFixedThreadPool(1);
+        List<ConcurrentLinkedQueue<VectorizedRowBatch>> partitioned = new ArrayList<>(numPartition);
+        for (int i = 0; i < numPartition; ++i)
+        {
+            partitioned.add(new ConcurrentLinkedQueue<>());
+        }
+        for (InputSplit inputSplit1 : inputSplits)
+        {
+            List<InputInfo> scanInputs1 = inputSplit1.getInputInfos();
+            threadPool.execute(() -> {
+                try
+                {
+                    partitionFile(transId, scanInputs1, colNames, inputStorage.getScheme(), filter, );
+                }
+            });
+        }
+
+    }
+
+    public void runRightPartitioner()
+    {
+
+    }
+
+    public void runPartitionedJoiner()
+    {
+
+    }
+
+    @Test
+    public void testJoin()
+    {
+        int numPartitions = 8;
+        // 左表和右表分别启动十个partitioner
+        runAsync(() -> {
+            try
+            {
+                runLeftPartitioner();
+            } catch (Exception e)
+            {
+                e.printStackTrace();
+            }
+        }, numPartitions);
+        runAsync(() -> {
+            try
+            {
+                runRightPartitioner();
+            } catch (Exception e)
+            {
+                e.printStackTrace();
+            }
+        }, numPartitions);
+
+        StorageInfo leftStorage = new StorageInfo(Storage.Scheme.stream, "", "", "", "");
+        StorageInfo rightStorage = new StorageInfo(Storage.Scheme.stream, "", "", "", "");
+        StorageInfo outputStorage = new StorageInfo(Storage.Scheme.file, "", "", "", "");
+        WorkerCommon.initStorage(leftStorage);
+        WorkerCommon.initStorage(rightStorage);
+        WorkerCommon.initStorage(outputStorage);
+
+
+    }
+
+    void partitionFile(long transId, List<InputInfo> scanInputs,
+                       String[] columnsToRead, Storage.Scheme inputScheme,
+                       TableScanFilter filter, int[] keyColumnIds, boolean[] projection,
+                       List<ConcurrentLinkedQueue<VectorizedRowBatch>> partitionResult,
+                       AtomicReference<TypeDescription> writerSchema)
+    {
+        Scanner scanner = null;
+        Partitioner partitioner = null;
+        for (InputInfo inputInfo : scanInputs)
+        {
+            try (PixelsReader pixelsReader = WorkerCommon.getReader(
+                    inputInfo.getPath(), WorkerCommon.getStorage(inputScheme)))
+            {
+                // TODO(hsy): support get row group num
+                // ...
+                PixelsReaderOption option = WorkerCommon.getReaderOption(transId, columnsToRead, inputInfo);
+                PixelsRecordReader recordReader = pixelsReader.read(option);
+                TypeDescription rowBatchSchema = recordReader.getResultSchema();
+                VectorizedRowBatch rowBatch;
+
+                if (scanner == null)
+                {
+                    scanner = new Scanner(WorkerCommon.rowBatchSize, rowBatchSchema, columnsToRead, projection, filter);
+                }
+                if (partitioner == null)
+                {
+                    partitioner = new Partitioner(partitionResult.size(), WorkerCommon.rowBatchSize,
+                            scanner.getOutputSchema(), keyColumnIds);
+                }
+                if (writerSchema.get() == null)
+                {
+                    writerSchema.weakCompareAndSet(null, scanner.getOutputSchema());
+                }
+
+                do
+                {
+                    rowBatch = scanner.filterAndProject(recordReader.readBatch(WorkerCommon.rowBatchSize));
+                    if (rowBatch.size > 0)
+                    {
+                        Map<Integer, VectorizedRowBatch> result = partitioner.partition(rowBatch);
+                        if (!result.isEmpty())
+                        {
+                            for (Map.Entry<Integer, VectorizedRowBatch> entry : result.entrySet())
+                            {
+                                partitionResult.get(entry.getKey()).add(entry.getValue());
+                            }
+                        }
+                    }
+                } while (rowBatch.size > 0);
+            } catch (Throwable e)
+            {
+                throw new WorkerException("failed to scan the file '" +
+                        inputInfo.getPath() + "' and output the partitioning result", e);
+            }
+        }
+        if (partitioner != null)
+        {
+            VectorizedRowBatch[] tailBatches = partitioner.getRowBatches();
+            for (int hash = 0; hash < tailBatches.length; ++hash)
+            {
+                if (!tailBatches[hash].isEmpty())
+                {
+                    partitionResult.get(hash).add(tailBatches[hash]);
+                }
+            }
+        }
     }
 }

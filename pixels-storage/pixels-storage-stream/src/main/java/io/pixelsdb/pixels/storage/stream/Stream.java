@@ -15,7 +15,7 @@ import java.util.List;
 public class Stream implements Storage
 {
     private static final Logger logger = LogManager.getLogger(Stream.class);
-    private static final String SchemePrefix = Scheme.stream.name() + "://";
+    private static final String SchemePrefix = "http://";
 
     public Stream()
     {}
@@ -30,11 +30,14 @@ public class Stream implements Storage
         {
             return path;
         }
-        if (path.contains("://"))
+        if (!path.startsWith(SchemePrefix))
         {
+            if (path.contains("://"))
+            {
             throw new IOException("Path '" + path +
                     "' already has a different scheme prefix than '" + SchemePrefix + "'.");
         }
+
         return SchemePrefix + path;
     }
 

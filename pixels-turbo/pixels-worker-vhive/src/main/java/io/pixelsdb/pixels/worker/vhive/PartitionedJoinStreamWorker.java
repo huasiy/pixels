@@ -74,12 +74,10 @@ public class PartitionedJoinStreamWorker implements RequestHandler<PartitionedJo
             for (int i = 8890; i < 8890+numPartition; i++) {
                 endpoints.add(endpoint + i);
             }
-            StorageInfo leftStorageInfo = new StorageInfo(Storage.Scheme.stream_in, "", endpoints, "", "");
             endpoints.clear();
             for (int i = 8990; i < 8990+numPartition; i++) {
                 endpoints.add(endpoint + i);
             }
-            StorageInfo rightStorageInfo = new StorageInfo(Storage.Scheme.stream_in, "", endpoints, "", "");
 
 
         } catch (Throwable e)

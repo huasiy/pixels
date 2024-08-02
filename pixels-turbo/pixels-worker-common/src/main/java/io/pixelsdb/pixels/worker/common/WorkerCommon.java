@@ -351,15 +351,30 @@ public class WorkerCommon
     {
         requireNonNull(filePath, "fileName is null");
         requireNonNull(storage, "storage is null");
-        PixelsReaderImpl.Builder builder = PixelsReaderImpl.newBuilder()
-                .setStorage(storage)
-                .setPath(filePath)
-                .setEnableCache(false)
-                .setCacheOrder(ImmutableList.of())
-                .setPixelsCacheReader(null)
-                .setPixelsFooterCache(footerCache);
-        PixelsReader pixelsReader = builder.build();
-        return pixelsReader;
+        if (storage.getScheme() == Storage.Scheme.stream)
+        {
+            String schemaPath = storage.ensureSchemePrefix(filePath);
+            PixelsReaderStreamImpl reader;
+            try
+            {
+                reader = new PixelsReaderStreamImpl(schemaPath);
+            } catch (Exception e)
+            {
+                throw new IOException("failed to create PixelsReaderStreamImpl of " + schemaPath, e);
+            }
+            return reader;
+        } else
+        {
+            PixelsReaderImpl.Builder builder = PixelsReaderImpl.newBuilder()
+                    .setStorage(storage)
+                    .setPath(filePath)
+                    .setEnableCache(false)
+                    .setCacheOrder(ImmutableList.of())
+                    .setPixelsCacheReader(null)
+                    .setPixelsFooterCache(footerCache);
+            PixelsReader pixelsReader = builder.build();
+            return pixelsReader;
+        }
     }
 
     /**

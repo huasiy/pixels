@@ -44,14 +44,16 @@ public class TestPartitioner
     @Test
     public void test() throws IOException
     {
+
         Storage storage = StorageFactory.Instance().getStorage(Storage.Scheme.file);
         PixelsReader pixelsReader = PixelsReaderImpl.newBuilder()
-                .setPath("/home/hank/Desktop/20220313083127_0.compact.pxl")
+                .setPath("/Users/hsy/Documents/nation.pxl")
                 .setStorage(storage).setPixelsFooterCache(new PixelsFooterCache()).setEnableCache(false).build();
         PixelsReaderOption option = new PixelsReaderOption();
         option.transId(123456);
-        option.includeCols(new String[] {"c_custkey", "c_name", "c_address",
-                "c_nationkey", "c_phone", "c_acctbal", "c_mktsegment", "c_comment"});
+//        option.includeCols(new String[] {"c_custkey", "c_name", "c_address",
+//                "c_nationkey", "c_phone", "c_acctbal", "c_mktsegment", "c_comment"});
+        option.includeCols(new String[] {"n_nationkey", "n_name", "n_regionkey", "n_comment"});
         option.rgRange(4, 4);
         PixelsRecordReader recordReader = pixelsReader.read(option);
 
@@ -116,7 +118,7 @@ public class TestPartitioner
         }
 
         PixelsWriter pixelsWriter = PixelsWriterImpl.newBuilder().setStorage(storage)
-                .setPath("/home/hank/Desktop/part-0").setPartitioned(true)
+                .setPath("/Users/hsy/Documents/").setPartitioned(true)
                 .setEncodingLevel(EncodingLevel.EL2).setPixelStride(10000).setOverwrite(true)
                 .setPartKeyColumnIds(Arrays.asList(0))
                 .setRowGroupSize(268435456).setSchema(rowBatchSchema).build();
@@ -169,12 +171,13 @@ public class TestPartitioner
         }
 
         PixelsReader pixelsReader1 = PixelsReaderImpl.newBuilder()
-                .setPath("/home/hank/Desktop/part-0")
+                .setPath("/Users/hsy/Documents/part-0")
                 .setStorage(storage).setPixelsFooterCache(new PixelsFooterCache()).setEnableCache(false).build();
         PixelsReaderOption option1 = new PixelsReaderOption();
         option1.transId(123456);
-        option1.includeCols(new String[] {"c_custkey", "c_name", "c_address",
-                "c_nationkey", "c_phone", "c_acctbal", "c_mktsegment", "c_comment"});
+//        option1.includeCols(new String[] {"c_custkey", "c_name", "c_address",
+//                "c_nationkey", "c_phone", "c_acctbal", "c_mktsegment", "c_comment"});
+        option.includeCols(new String[] {"n_nationkey", "n_name", "n_regionkey", "n_comment"});
         option1.rgRange(0, -1);
         PixelsRecordReader recordReader1 = pixelsReader1.read(option1);
 

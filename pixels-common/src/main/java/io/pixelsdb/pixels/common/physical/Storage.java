@@ -47,7 +47,7 @@ public interface Storage
         redis, // Redis
         gcs,   // google cloud storage
         mock,  // mock
-        stream, // http stream
+        stream; // http stream
         /**
          * Case-insensitive parsing from String name to enum value.
          * @param value the name of storage scheme.

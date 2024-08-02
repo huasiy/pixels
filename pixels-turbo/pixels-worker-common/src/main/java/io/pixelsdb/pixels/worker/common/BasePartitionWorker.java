@@ -200,7 +200,7 @@ public class BasePartitionWorker extends Worker<PartitionInput, PartitionOutput>
      * @param partitionResult the partition result
      * @param writerSchema the schema to be used for the partition result writer
      */
-    private void partitionFile(long transId, List<InputInfo> scanInputs,
+    public void partitionFile(long transId, List<InputInfo> scanInputs,
                                String[] columnsToRead, Storage.Scheme inputScheme,
                                TableScanFilter filter, int[] keyColumnIds, boolean[] projection,
                                List<ConcurrentLinkedQueue<VectorizedRowBatch>> partitionResult,
