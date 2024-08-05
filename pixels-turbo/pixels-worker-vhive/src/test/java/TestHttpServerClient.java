@@ -32,17 +32,17 @@ import io.pixelsdb.pixels.executor.scan.Scanner;
 import io.pixelsdb.pixels.planner.plan.physical.domain.InputInfo;
 import io.pixelsdb.pixels.planner.plan.physical.domain.InputSplit;
 import io.pixelsdb.pixels.planner.plan.physical.domain.StorageInfo;
+import io.pixelsdb.pixels.planner.plan.physical.output.JoinOutput;
+import io.pixelsdb.pixels.planner.plan.physical.output.PartitionOutput;
 import io.pixelsdb.pixels.worker.common.*;
 import org.junit.Test;
 
 import java.io.IOException;
 import java.net.URI;
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 
 /**
  * @author jasha64
@@ -225,22 +225,18 @@ public class TestHttpServerClient
         }, 3);
     }
 
-    public void runServer()
-    {
-        PixelsReaderStreamImpl reader = new PixelsReaderStreamImpl("localhost:")
-    }
-
     public void runLeftPartitioner()
     {
+        PartitionOutput partitionOutput = new PartitionOutput();
         int numPartition = 8;
         long transId = 123456;
-        String filePath = "/Users/hsy/Documents/nation.pxl";
+        String filePath = "/home/hsy/Downloads/nation.pxl";
         StorageInfo inputStorage = new StorageInfo(Storage.Scheme.file, "", "", "", "");
         StorageInfo outputStorage = new StorageInfo(Storage.Scheme.stream, "", "", "", "");
         WorkerCommon.initStorage(inputStorage);
         WorkerCommon.initStorage(outputStorage);
 
-        InputInfo scanInput = new InputInfo(filePath, 0 ,4);
+        InputInfo scanInput = new InputInfo(filePath, 0 ,32);
         List<InputInfo> scanInputs = new ArrayList<>();
         scanInputs.add(scanInput);
         InputSplit inputSplit = new InputSplit();
@@ -249,10 +245,14 @@ public class TestHttpServerClient
         inputSplits.add(inputSplit);
 
         String[] colNames = new String[]{"n_nationkey", "n_name", "n_regionkey", "n_comment"};
+        int[] keyColumnIds = new int[]{0};
+        boolean[] projections = new boolean[]{true, true, true, true};
+        boolean encoding = true;
         SortedMap<Integer, ColumnFilter> columnFilters = new TreeMap<>();
-        TableScanFilter filter = new TableScanFilter("tpch", "lineitem", columnFilters);
+        TableScanFilter filter = new TableScanFilter("tpch", "nation", columnFilters);
         ExecutorService threadPool = Executors.newFixedThreadPool(1);
         List<ConcurrentLinkedQueue<VectorizedRowBatch>> partitioned = new ArrayList<>(numPartition);
+        AtomicReference<TypeDescription> writerSchema = new AtomicReference<>();
         for (int i = 0; i < numPartition; ++i)
         {
             partitioned.add(new ConcurrentLinkedQueue<>());
@@ -263,28 +263,177 @@ public class TestHttpServerClient
             threadPool.execute(() -> {
                 try
                 {
-                    partitionFile(transId, scanInputs1, colNames, inputStorage.getScheme(), filter, );
+                    partitionFile(transId, scanInputs1, colNames, inputStorage.getScheme(), filter, keyColumnIds,
+                            projections, partitioned, writerSchema);
+                } catch (Throwable e)
+                {
+                    throw new WorkerException("error during partitioning", e);
                 }
             });
         }
+        threadPool.shutdown();
+        try
+        {
+            while (!threadPool.awaitTermination(60, TimeUnit.SECONDS));
+        } catch (InterruptedException e)
+        {
+            throw new WorkerException("interrupted while waiting for the termination of partitioning", e);
+        }
 
+        try
+        {
+            if (writerSchema.get() == null)
+            {
+                TypeDescription fileSchema = WorkerCommon.getFileSchemaFromSplits(
+                        WorkerCommon.getStorage(inputStorage.getScheme()), inputSplits);
+                TypeDescription resultSchema = WorkerCommon.getResultSchema(fileSchema, colNames);
+                writerSchema.set(resultSchema);
+            }
+            String[] downStreamWorkers = new String[] {"127.0.0.1:50010", "127.0.0.1:50011", "127.0.0.1:50012",
+                    "127.0.0.1:50013", "127.0.0.1:50014", "127.0.0.1:50015", "127.0.0.1:50016", "127.0.0.1:50017",};
+            Set<Integer> hashValues = new HashSet<>(numPartition);
+            for (int hash = 0; hash < numPartition; ++hash)
+            {
+                ConcurrentLinkedQueue<VectorizedRowBatch> batches = partitioned.get(hash);
+                String worker = downStreamWorkers[hash];
+                PixelsWriter pixelsWriter = WorkerCommon.getWriter(writerSchema.get(),
+                        WorkerCommon.getStorage(outputStorage.getScheme()), worker, encoding,
+                        false, Arrays.stream(keyColumnIds).boxed().collect(Collectors.toList()));
+                if (!batches.isEmpty())
+                {
+                    for (VectorizedRowBatch batch : batches)
+                    {
+                        pixelsWriter.addRowBatch(batch, hash);
+                    }
+                    hashValues.add(hash);
+                }
+                pixelsWriter.close();
+            }
+            partitionOutput.setHashValues(hashValues);
+        } catch (Exception e)
+        {
+            System.out.println("error during partitioning: " + e);
+            partitionOutput.setSuccessful(false);
+        }
     }
 
     public void runRightPartitioner()
     {
+        PartitionOutput partitionOutput = new PartitionOutput();
+        int numPartition = 8;
+        long transId = 123456;
+        String filePath = "/home/hsy/Downloads/supplier.pxl";
+        StorageInfo inputStorage = new StorageInfo(Storage.Scheme.file, "", "", "", "");
+        StorageInfo outputStorage = new StorageInfo(Storage.Scheme.stream, "", "", "", "");
+        WorkerCommon.initStorage(inputStorage);
+        WorkerCommon.initStorage(outputStorage);
 
+        InputInfo scanInput = new InputInfo(filePath, 0 ,16);
+        List<InputInfo> scanInputs = new ArrayList<>();
+        scanInputs.add(scanInput);
+        InputSplit inputSplit = new InputSplit();
+        inputSplit.setInputInfos(scanInputs);
+        List<InputSplit> inputSplits = new ArrayList<>();
+        inputSplits.add(inputSplit);
+
+        String[] colNames = new String[]{"s_suppkey", "s_name", "s_address", "s_nationkey", "s_phone", "s_acctbal", "s_comment"};
+        int[] keyColumnIds = new int[]{3};
+        boolean[] projections = new boolean[]{true, true, true, true, true, true, true};
+        boolean encoding = true;
+        SortedMap<Integer, ColumnFilter> columnFilters = new TreeMap<>();
+        TableScanFilter filter = new TableScanFilter("tpch", "supplier", columnFilters);
+        ExecutorService threadPool = Executors.newFixedThreadPool(1);
+        List<ConcurrentLinkedQueue<VectorizedRowBatch>> partitioned = new ArrayList<>(numPartition);
+        AtomicReference<TypeDescription> writerSchema = new AtomicReference<>();
+        for (int i = 0; i < numPartition; ++i)
+        {
+            partitioned.add(new ConcurrentLinkedQueue<>());
+        }
+        for (InputSplit inputSplit1 : inputSplits)
+        {
+            List<InputInfo> scanInputs1 = inputSplit1.getInputInfos();
+            threadPool.execute(() -> {
+                try
+                {
+                    partitionFile(transId, scanInputs1, colNames, inputStorage.getScheme(), filter, keyColumnIds,
+                            projections, partitioned, writerSchema);
+                } catch (Throwable e)
+                {
+                    throw new WorkerException("error during partitioning", e);
+                }
+            });
+        }
+        threadPool.shutdown();
+        try
+        {
+            while (!threadPool.awaitTermination(60, TimeUnit.SECONDS));
+        } catch (InterruptedException e)
+        {
+            throw new WorkerException("interrupted while waiting for the termination of partitioning", e);
+        }
+
+        try
+        {
+            if (writerSchema.get() == null)
+            {
+                TypeDescription fileSchema = WorkerCommon.getFileSchemaFromSplits(
+                        WorkerCommon.getStorage(inputStorage.getScheme()), inputSplits);
+                TypeDescription resultSchema = WorkerCommon.getResultSchema(fileSchema, colNames);
+                writerSchema.set(resultSchema);
+            }
+            String[] downStreamWorkers = new String[] {"127.0.0.1:50018", "127.0.0.1:50019", "127.0.0.1:50020",
+            "127.0.0.1:50021", "127.0.0.1:50022", "127.0.0.1:50023", "127.0.0.1:50024", "127.0.0.1:50025"};
+            Set<Integer> hashValues = new HashSet<>(numPartition);
+            for (int hash = 0; hash < numPartition; ++hash)
+            {
+                ConcurrentLinkedQueue<VectorizedRowBatch> batches = partitioned.get(hash);
+                String worker = downStreamWorkers[hash];
+                PixelsWriter pixelsWriter = WorkerCommon.getWriter(writerSchema.get(),
+                        WorkerCommon.getStorage(outputStorage.getScheme()), worker, encoding,
+                        false, Arrays.stream(keyColumnIds).boxed().collect(Collectors.toList()));
+                if (!batches.isEmpty())
+                {
+                    for (VectorizedRowBatch batch : batches)
+                    {
+                        pixelsWriter.addRowBatch(batch, hash);
+                    }
+                    hashValues.add(hash);
+                }
+                pixelsWriter.close();
+            }
+            partitionOutput.setHashValues(hashValues);
+        } catch (Exception e)
+        {
+            System.out.println("error during partitioning: " + e);
+            partitionOutput.setSuccessful(false);
+        }
     }
 
-    public void runPartitionedJoiner()
-    {
 
+
+    public void runPartitionedJoiner(int partitionId)
+    {
+        JoinOutput joinOutput = new JoinOutput();
+        try
+        {
+            ExecutorService threadPool = Executors.newFixedThreadPool(1);
+            int numPartition = 8;
+            long transId = 123456;
+
+
+        } catch (Exception e)
+        {
+            throw new WorkerException("error running partitionedJoiner ", e);
+        }
     }
 
     @Test
     public void testJoin()
     {
         int numPartitions = 8;
-        // 左表和右表分别启动十个partitioner
+        int numLeftPartitioner = 4;
+        int numRightPartitioner = 4;
+        // 左表和右表分别启动4个partitioner
         runAsync(() -> {
             try
             {
@@ -293,7 +442,7 @@ public class TestHttpServerClient
             {
                 e.printStackTrace();
             }
-        }, numPartitions);
+        }, numLeftPartitioner);
         runAsync(() -> {
             try
             {
@@ -302,8 +451,21 @@ public class TestHttpServerClient
             {
                 e.printStackTrace();
             }
-        }, numPartitions);
+        }, numRightPartitioner);
 
+        ExecutorService executor = Executors.newFixedThreadPool(numPartitions);
+        for (int i = 0; i < numPartitions; i++) {
+            int partitionId = i;
+            executor.submit(() -> {
+               try
+               {
+                   runPartitionedJoiner(partitionId);
+               } catch (Exception e)
+               {
+                   e.printStackTrace();
+               }
+            });
+        }
         StorageInfo leftStorage = new StorageInfo(Storage.Scheme.stream, "", "", "", "");
         StorageInfo rightStorage = new StorageInfo(Storage.Scheme.stream, "", "", "", "");
         StorageInfo outputStorage = new StorageInfo(Storage.Scheme.file, "", "", "", "");
