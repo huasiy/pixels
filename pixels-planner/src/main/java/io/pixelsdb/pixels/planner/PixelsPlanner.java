@@ -186,11 +186,7 @@ public class PixelsPlanner
             ScanInput scanInput = new ScanInput();
             scanInput.setTransId(transId);
             ScanTableInfo tableInfo = new ScanTableInfo();
-            int parallelism = 1;
-            if (Objects.equals(config.getProperty("executor.exchange.method"), ExchangeMethod.batch.name()))
-            {
-                parallelism = IntraWorkerParallelism;
-            }
+            int parallelism = IntraWorkerParallelism;
             ImmutableList.Builder<InputSplit> inputsBuilder = ImmutableList
                     .builderWithExpectedSize(parallelism);
             for (int j = 0; j < parallelism && i < inputSplits.size(); ++j, ++i)
