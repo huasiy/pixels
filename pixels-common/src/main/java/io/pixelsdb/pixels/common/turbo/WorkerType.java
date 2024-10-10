@@ -28,7 +28,7 @@ public enum WorkerType
     UNKNOWN, // The first enum value is the default value.
     SCAN, SCAN_STREAM,
     PARTITION,
-    BROADCAST_JOIN,
+    BROADCAST_JOIN, BROADCAST_JOIN_STREAM,
     BROADCAST_CHAIN_JOIN,
     PARTITIONED_JOIN,
     PARTITIONED_CHAIN_JOIN,
