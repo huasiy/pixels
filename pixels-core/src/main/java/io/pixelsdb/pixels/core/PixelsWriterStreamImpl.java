@@ -34,7 +34,6 @@ import io.pixelsdb.pixels.core.writer.ColumnWriter;
 import io.pixelsdb.pixels.core.writer.PixelsWriterOption;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
 import javax.annotation.concurrent.NotThreadSafe;
 import java.io.IOException;
@@ -93,7 +92,7 @@ public class PixelsWriterStreamImpl implements PixelsWriter
 
     public static int getSchemaPort(String path)
     {
-        throw new NotImplementedException();
+        throw new UnsupportedOperationException();
     }
 
     private final TypeDescription schema;
@@ -290,7 +289,7 @@ public class PixelsWriterStreamImpl implements PixelsWriter
 
         public Builder setUri(URI uri)
         {
-            throw new NotImplementedException();
+            throw new UnsupportedOperationException();
         }
 
         public PixelsWriter build() throws PixelsWriterException
@@ -305,10 +304,6 @@ public class PixelsWriterStreamImpl implements PixelsWriter
             checkArgument(this.builderPartitioned ==
                             (this.builderPartKeyColumnIds.isPresent() && !this.builderPartKeyColumnIds.get().isEmpty()),
                     "partition column ids are present while partitioned is false, or vice versa");
-            checkArgument(!this.builderPartitioned || this.builderPartitionId >= 0,
-                    "partition id is not set while partitioned is true");
-            checkArgument(!this.builderPartitioned || this.builderFileNames != null,
-                    "file names are not set (partitioned: true)");
 
             PhysicalWriter fsWriter;
             try

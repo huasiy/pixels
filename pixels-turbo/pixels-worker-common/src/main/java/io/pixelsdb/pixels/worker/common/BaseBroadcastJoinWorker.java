@@ -28,9 +28,7 @@ import io.pixelsdb.pixels.core.reader.PixelsReaderOption;
 import io.pixelsdb.pixels.core.reader.PixelsRecordReader;
 import io.pixelsdb.pixels.core.utils.Bitmap;
 import io.pixelsdb.pixels.core.vector.VectorizedRowBatch;
-import io.pixelsdb.pixels.executor.join.JoinType;
-import io.pixelsdb.pixels.executor.join.Joiner;
-import io.pixelsdb.pixels.executor.join.Partitioner;
+import io.pixelsdb.pixels.executor.join.*;
 import io.pixelsdb.pixels.executor.predicate.TableScanFilter;
 import io.pixelsdb.pixels.planner.plan.physical.domain.*;
 import io.pixelsdb.pixels.planner.plan.physical.input.BroadcastJoinInput;
@@ -140,9 +138,10 @@ public class BaseBroadcastJoinWorker extends Worker<BroadcastJoinInput, JoinOutp
                     WorkerCommon.getStorage(leftInputStorageInfo.getScheme()),
                     WorkerCommon.getStorage(rightInputStorageInfo.getScheme()),
                     leftSchema, rightSchema, leftInputs, rightInputs);
-            Joiner joiner = new Joiner(joinType,
+            Joiner joiner = new HashJoiner(joinType,
                     WorkerCommon.getResultSchema(leftSchema.get(), leftCols), leftColAlias, leftProjection, leftKeyColumnIds,
                     WorkerCommon.getResultSchema(rightSchema.get(), rightCols), rightColAlias, rightProjection, rightKeyColumnIds);
+            logger.info("joiner joined schema is {}", joiner.getJoinedSchema().getChildren());
             // build the hash table for the left table.
             List<Future> leftFutures = new ArrayList<>();
             for (InputSplit inputSplit : leftInputs)
@@ -151,7 +150,7 @@ public class BaseBroadcastJoinWorker extends Worker<BroadcastJoinInput, JoinOutp
                 leftFutures.add(threadPool.submit(() -> {
                     try
                     {
-                        buildHashTable(transId, timestamp, joiner, inputs, leftInputStorageInfo.getScheme(),
+                        buildHashTable(transId, timestamp, (HashJoiner) joiner, inputs, leftInputStorageInfo.getScheme(),
                                 !leftTable.isBase(), leftCols, leftFilter, workerMetrics);
                     }
                     catch (Throwable e)
@@ -166,6 +165,7 @@ public class BaseBroadcastJoinWorker extends Worker<BroadcastJoinInput, JoinOutp
             }
             logger.info("hash table size: " + joiner.getSmallTableSize() + ", duration (ns): " +
                     (workerMetrics.getInputCostNs() + workerMetrics.getComputeCostNs()));
+            logger.info("joiner joined schema is {}", joiner.getJoinedSchema().getChildren());
 
             List<ConcurrentLinkedQueue<VectorizedRowBatch>> result = new ArrayList<>();
             if (partitionOutput)
@@ -216,6 +216,7 @@ public class BaseBroadcastJoinWorker extends Worker<BroadcastJoinInput, JoinOutp
                     throw new WorkerException("error occurred threads, please check the stacktrace before this log record");
                 }
             }
+            logger.info("joiner joined schema is {}", joiner.getJoinedSchema().getChildren());
 
             String outputPath = outputFolder + outputInfo.getFileNames().get(0);
             try
@@ -243,6 +244,7 @@ public class BaseBroadcastJoinWorker extends Worker<BroadcastJoinInput, JoinOutp
                 }
                 else
                 {
+                    logger.info("joiner joined schema is {}", joiner.getJoinedSchema().getChildren());
                     pixelsWriter = WorkerCommon.getWriter(joiner.getJoinedSchema(),
                             WorkerCommon.getStorage(outputStorageInfo.getScheme()), outputPath,
                             encoding, false, null);
@@ -298,7 +300,7 @@ public class BaseBroadcastJoinWorker extends Worker<BroadcastJoinInput, JoinOutp
      * @param leftFilter the table scan filter on the left table
      * @param workerMetrics the collector of the performance metrics
      */
-    public static void buildHashTable(long transId, long timestamp, Joiner joiner, List<InputInfo> leftInputs,
+    public static void buildHashTable(long transId, long timestamp, HashJoiner joiner, List<InputInfo> leftInputs,
                                       Storage.Scheme leftScheme, boolean checkExistence, String[] leftCols,
                                       TableScanFilter leftFilter, WorkerMetrics workerMetrics)
     {
@@ -413,14 +415,17 @@ public class BaseBroadcastJoinWorker extends Worker<BroadcastJoinInput, JoinOutp
                         input.getPath(), WorkerCommon.getStorage(rightScheme)))
                 {
                     readCostTimer.stop();
-                    if (input.getRgStart() >= pixelsReader.getRowGroupNum())
+                    if (rightScheme != Storage.Scheme.httpstream)
                     {
-                        it.remove();
-                        continue;
-                    }
-                    if (input.getRgStart() + input.getRgLength() >= pixelsReader.getRowGroupNum())
-                    {
-                        input.setRgLength(pixelsReader.getRowGroupNum() - input.getRgStart());
+                        if (input.getRgStart() >= pixelsReader.getRowGroupNum())
+                        {
+                            it.remove();
+                            continue;
+                        }
+                        if (input.getRgStart() + input.getRgLength() >= pixelsReader.getRowGroupNum())
+                        {
+                            input.setRgLength(pixelsReader.getRowGroupNum() - input.getRgStart());
+                        }
                     }
                     PixelsReaderOption option = WorkerCommon.getReaderOption(transId, timestamp, rightCols, input);
                     VectorizedRowBatch rowBatch;

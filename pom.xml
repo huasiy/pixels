@@ -60,6 +60,8 @@
         <module>pixels-turbo/pixels-worker-vhive</module>
         <module>pixels-turbo/pixels-invoker-vhive</module>
         <module>pixels-turbo/pixels-scaling-general</module>
+        <module>pixels-index/pixels-index-rocksdb</module>
+        <module>pixels-index/pixels-index-rockset</module>
     </modules>
 
     <properties>
@@ -68,6 +70,7 @@
         <maven.compiler.target>8</maven.compiler.target>
         <maven.compiler.useIncrementalCompilation>true</maven.compiler.useIncrementalCompilation>
         <maven.plugin.source.version>3.1.0</maven.plugin.source.version>
+        <maven.plugin.compile.version>3.8.1</maven.plugin.compile.version>
         <maven.plugin.shade.version>3.2.2</maven.plugin.shade.version>
         <maven.plugin.assembly.version>3.5.0</maven.plugin.assembly.version>
         <maven.plugin.deploy.version>3.1.0</maven.plugin.deploy.version>
@@ -80,9 +83,9 @@
         <dep.hadoop.version>3.3.1</dep.hadoop.version>
         <dep.ozone.version>0.5.0-beta</dep.ozone.version>
         <dep.awssdk.version>2.29.31</dep.awssdk.version>
-        <dep.awssdk.preview.version>2.29.31</dep.awssdk.preview.version>
         <dep.jedis.version>4.2.0</dep.jedis.version>
         <dep.gcp.version>26.1.2</dep.gcp.version>
+        <dep.rocksdb.version>9.10.0</dep.rocksdb.version>
 
         <!-- common libraries -->
         <dep.airlift.slice.version>0.34</dep.airlift.slice.version>
@@ -445,12 +448,6 @@
                 <scope>import</scope>
             </dependency>
 
-            <dependency>
-                <groupId>software.amazon.awssdk</groupId>
-                <artifactId>aws-crt-client</artifactId>
-                <version>${dep.awssdk.preview.version}</version>
-            </dependency>
-
             <!-- google cloud -->
             <dependency>
                 <groupId>com.google.cloud</groupId>
@@ -477,6 +474,12 @@
                 <groupId>io.airlift</groupId>
                 <artifactId>slice</artifactId>
                 <version>${dep.airlift.slice.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.rocksdb</groupId>
+                <artifactId>rocksdbjni</artifactId>
+                <version>${dep.rocksdb.version}</version>
             </dependency>
 
             <!-- guava -->

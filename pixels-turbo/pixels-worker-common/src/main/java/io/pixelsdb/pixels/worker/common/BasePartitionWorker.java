@@ -154,6 +154,7 @@ public class BasePartitionWorker extends Worker<PartitionInput, PartitionOutput>
                     WorkerCommon.getStorage(outputStorageInfo.getScheme()), outputPath, encoding,
                     true, Arrays.stream(keyColumnIds).boxed().collect(Collectors.toList()));
             Set<Integer> hashValues = new HashSet<>(numPartition);
+
             for (int hash = 0; hash < numPartition; ++hash)
             {
                 ConcurrentLinkedQueue<VectorizedRowBatch> batches = partitioned.get(hash);
@@ -202,11 +203,11 @@ public class BasePartitionWorker extends Worker<PartitionInput, PartitionOutput>
      * @param partitionResult the partition result
      * @param writerSchema the schema to be used for the partition result writer
      */
-    private void partitionFile(long transId, long timestamp, List<InputInfo> scanInputs,
-                               String[] columnsToRead, Storage.Scheme inputScheme,
-                               TableScanFilter filter, int[] keyColumnIds, boolean[] projection,
-                               List<ConcurrentLinkedQueue<VectorizedRowBatch>> partitionResult,
-                               AtomicReference<TypeDescription> writerSchema)
+    protected void partitionFile(long transId, long timestamp, List<InputInfo> scanInputs,
+                                 String[] columnsToRead, Storage.Scheme inputScheme,
+                                 TableScanFilter filter, int[] keyColumnIds, boolean[] projection,
+                                 List<ConcurrentLinkedQueue<VectorizedRowBatch>> partitionResult,
+                                 AtomicReference<TypeDescription> writerSchema)
     {
         Scanner scanner = null;
         Partitioner partitioner = null;

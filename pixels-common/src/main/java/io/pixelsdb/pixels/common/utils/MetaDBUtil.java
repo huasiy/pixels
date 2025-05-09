@@ -31,15 +31,16 @@ import java.sql.SQLException;
  */
 public class MetaDBUtil
 {
-    private static final MetaDBUtil INSTANCE = new MetaDBUtil();
+    private static final Logger log = LogManager.getLogger(MetaDBUtil.class);
+
+    private static final MetaDBUtil Instance = new MetaDBUtil();
 
     public static MetaDBUtil Instance()
     {
-        return INSTANCE;
+        return Instance;
     }
 
     private Connection connection = null;
-    private static final Logger log = LogManager.getLogger(MetaDBUtil.class);
 
     private String url;
     private String user;
@@ -76,7 +77,7 @@ public class MetaDBUtil
         }
         catch (SQLException e)
         {
-            log.error("Connection error: " + e.getMessage());
+            log.error("Connection error: {}", e.getMessage());
             return null;
         }
     }
@@ -92,7 +93,7 @@ public class MetaDBUtil
         }
         catch (SQLException e)
         {
-            log.error("Close error: " + e.getMessage());
+            log.error("Close error: {}", e.getMessage());
         }
     }
 }

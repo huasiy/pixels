@@ -6,12 +6,13 @@ It is optimized for analytical tables stored in on-premises and cloud-native sto
 including S3, GCS, HDFS, Redis, and local file systems.
 Pixels outperforms Parquet, which is the most widely used columnar format in today's lakehouses, by up to two orders of magnitude.
 
-We have integrated Pixels with popular query engines including DuckDB (1.1.0), Trino (405 and 466), Presto (0.279), and Hive (2.3+).
+We have integrated Pixels with popular query engines including DuckDB (1.1.0), Trino (405 and 466), StarRocks (3.3.5), PrestoDB (0.279), and Hive (2.3+).
 
 The DuckDB integration and the C++ implementation of Pixels Reader are in the [cpp](cpp) folder.
 The other integrations are opensourced in separate repositories:
 * [Pixels Connector for Trino](https://github.com/pixelsdb/pixels-trino)
-* [Pixels Connector for Presto](https://github.com/pixelsdb/pixels-presto)
+* [Pixels Connector for PrestoDB](https://github.com/pixelsdb/pixels-presto)
+* [StarRocks with Pixels Integration](https://github.com/pixelsdb/starrocks)
 * [Pixels SerDe for Hive](https://github.com/pixelsdb/pixels-hive)
 
 Pixels also has its own query engine [Pixels-Turbo](pixels-turbo).
@@ -44,6 +45,9 @@ It may take a couple of minutes to complete. After that, find jar files:
 * `pixels-cli-*-full.jar` in `pixels-cli/target`, this is the jar of Pixels command line tool.
 
 They will be used in the installation of Pixels.
+
+> Note: Some Junit tests in Pixels access some low-level packages in the JDK, such as sun.nio and java.nio.
+> Compiling and running such test cases require lower version JDKs (e.g., 1.8). However, these tests are not necessary for the aforementioned build process.
 
 Pixels is compatible with different query engines, such as Trino, Presto, and Hive.
 The query engine integrations also can be built using maven.

@@ -73,6 +73,7 @@ public class CacheCoordinator implements Server
     private Storage storage = null;
     private boolean initializeSuccess = false;
     private CountDownLatch runningLatch;
+    private boolean running = false;
 
     public CacheCoordinator()
     {
@@ -154,6 +155,18 @@ public class CacheCoordinator implements Server
             return;
         }
 
+        synchronized (this) 
+        {
+            if (this.running)
+            {
+                return;
+            } 
+            else 
+            {
+                this.running = true;
+            }
+        }
+        
         logger.info("Starting cache coordinator");
         runningLatch = new CountDownLatch(1);
         // watch layout version change, and update the cache plan and the local cache version
@@ -215,29 +228,20 @@ public class CacheCoordinator implements Server
     @Override
     public boolean isRunning()
     {
-        return this.runningLatch.getCount() > 0;
+        return this.running;
     }
 
     @Override
     public void shutdown()
     {
+        this.running = false;
         logger.debug("Shutting down cache coordinator...");
         if (metadataService != null)
         {
             // Issue #708: no need the shut down the metadata service instance created using the configured host and port.
             metadataService = null;
         }
-        if (storage != null)
-        {
-            try
-            {
-                storage.close();
-            }
-            catch (IOException e)
-            {
-                logger.error("Failed to close cache storage while shutting down cache coordinator.", e);
-            }
-        }
+        // No need to close the storage instance as it is managed by the StorageFactory.
         if (runningLatch != null)
         {
             runningLatch.countDown();

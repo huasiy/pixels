@@ -54,7 +54,7 @@ public abstract class RangeIndexDao implements Dao<MetadataProto.RangeIndex>
         }
     }
 
-    abstract public boolean exists (MetadataProto.RangeIndex path);
+    abstract public boolean exists (MetadataProto.RangeIndex rangeIndex);
 
     /**
      * Insert the range index into metadata.
